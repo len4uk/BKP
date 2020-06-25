@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ServerConfig xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Database>
+    <Address>localhost</Address>
+    <User>IBS</User>
+    <Password>IBS</Password>
+    <DatabaseName>IBS</DatabaseName>
+    <Port>3306</Port>
+  </Database>
+  <Logger>
+    <LogName>ServerLog</LogName>
+    <LogLevel>Info</LogLevel>
+  </Logger>
+  <ServerConnectionConf>
+    <Port>8001</Port>
+    <MaxConnections>10</MaxConnections>
+  </ServerConnectionConf>
+</ServerConfig>
