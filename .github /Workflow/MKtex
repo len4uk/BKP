@@ -1,0 +1,187 @@
+#include <SoftwareSerial.h>
+#include <VL53L0X.h>
+#include <Wire.h>
+
+SoftwareSerial esp(6,7);//RX, TX
+VL53L0X VL53L0X_1;
+VL53L0X VL53L0X_2;
+SoftwareSerial rfid(12,11);
+
+
+// Задаём номера выводов:
+const unsigned int buttonPin = 2; 
+const unsigned int ledPin =  3; 
+const unsigned int VL53L0X_1Pin = 4;
+const unsigned int VL53L0X_2Pin = 13;
+
+const unsigned int threshold = 200;
+unsigned int count = 0;
+unsigned int count_card = 0;
+
+int flag=0;
+
+int countTrueCommand;
+int countTimeCommand;
+boolean found = false;
+int valSensor = 1;
+
+unsigned int sensor_1 = 0; // переменная  для хранения показаний с первого лазерного датчика 
+unsigned int sensor_2 = 0; // переменная  для хранения показаний с второго лазерного датчика
+bool s1_flag = false;   // флаг срабатывания первого датчика
+bool s2_flag = false;   // флаг срабатывания 2 датчика
+
+bool card_flag = false;
+
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+  pinMode(buttonPin, INPUT);
+  pinMode(VL53L0X_1Pin, OUTPUT);
+  pinMode(VL53L0X_2Pin, OUTPUT);
+  digitalWrite(VL53L0X_2Pin, LOW);
+  digitalWrite(VL53L0X_1Pin, LOW);
+  Serial.begin(115200);
+  esp.begin(115200);
+  rfid.begin(115200);
+  
+  sendCommand("AT",10, "OK");  
+  sendCommand("AT+CWMODE=1",100, "OK"); 
+  esp.println("AT+CWJAP=\"WiFi-DOM.ru-7628\",\"sSxjDkShfy\"");
+  delay(1000);
+  while(1)
+  {                       // ждем подключение к сети
+    esp.println("AT+CWJAP?");     // спрашиваем состояние
+    if (esp.find("OK")) break;  // если в ответе на команду нашли OK, выходим из цикла
+    else Serial.print(".");
+    delay(250);          
+  }
+  while(1)
+  {                       // ждем пока выдадут IP
+    esp.println("AT+CIFSR");       // спрашиваем состояние
+    if (esp.find("192")) break;  // если нам дали IP, выходим из цикла
+    else Serial.print(",");
+    delay(250); 
+  }
+   esp.println("AT+CIPSTART=\"TCP\",\"192.168.0.4\",11000"); 
+   delay(500);
+
+  digitalWrite(VL53L0X_1Pin, HIGH);
+  delay(150);
+  Serial.println("00");
+  VL53L0X_1.init(true);
+
+  Serial.println("01");
+  delay(100);
+  VL53L0X_1.setAddress((uint8_t)22);
+  Serial.println("02");
+  
+    digitalWrite(VL53L0X_1Pin, HIGH);
+    delay(150);
+  VL53L0X_2.init(true);
+  Serial.println("03");
+  delay(100);
+  VL53L0X_2.setAddress((uint8_t)25);
+  Serial.println("04");
+
+  Serial.println("addresses set");
+
+  
+}
+
+void loop() {
+Begin:
+ 
+ if(digitalRead(buttonPin)==HIGH&&flag==0)//Двери открыты
+ {
+   digitalWrite(ledPin,!digitalRead(ledPin));
+   flag=1;
+
+  sensor_1 = VL53L0X_1.readRangeContinuousMillimeters();
+  sensor_2 = VL53L0X_2.readRangeContinuousMillimeters();
+
+  if(sensor_1 <  threshold && s2_flag)
+  {
+    s1_flag = true;
+  }
+  if(sensor_2 <  threshold && s1_flag)
+  {
+     s2_flag = true;
+  }
+  if(s1_flag && s2_flag)
+  {
+    s1_flag = false;
+    s2_flag = false;
+    goto Begin;
+  }
+  if(s1_flag)
+  {
+    String number_card = "";
+    while(!s2_flag)
+    {
+       if(VL53L0X_2.readRangeContinuousMillimeters() <  threshold)
+       {
+          s2_flag = true;
+       }
+       else
+       {
+          count+=1;
+       }
+       if(count == 200)
+       {
+          s1_flag = false;
+          card_flag = false;
+          goto Begin;
+       }
+    }
+
+    Serial.println("Пассажир вход");
+    count_card++;
+  }
+
+  
+ }
+ if(digitalRead(buttonPin)==LOW&&flag==1)//двери закрыты
+{
+  flag=0;
+}
+Serial.println("Опрос датчиков");
+
+
+
+}
+
+
+void sendCommand(String command, int maxTime, char readReplay[]) {
+  Serial.print(countTrueCommand);
+  Serial.print(". at command => ");
+  Serial.print(command);
+  Serial.print(" ");
+  
+  while (countTimeCommand < (maxTime * 1))
+  {
+    esp.println(command);//at+cipsend
+    if (esp.find(readReplay)) //ok
+    {
+      found = true;
+      break;
+    }
+
+    countTimeCommand++;
+  }
+
+  if (found == true)
+  {
+    Serial.println("OK");
+    countTrueCommand++;
+    countTimeCommand = 0;
+  }
+
+  if (found == false)
+  {
+    Serial.println("Fail");
+    countTrueCommand = 0;
+    countTimeCommand = 0;
+  }
+
+  found = false;
+}
